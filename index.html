@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLS Interstitial with TextTrack API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        #url {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 800px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        #ad_progress {
+            background-color: #ffdd57;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+            font-weight: bold;
+        }
+
+        .video-container {
+            position: relative;
+            width: 960px;
+            height: 540px;
+            background-color: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        video {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #ad_video {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: none;
+        }
+
+        /* Custom Seek Bar as Overlay */
+        .seek-bar {
+            position: absolute;
+            bottom: 5px;
+            left: 5%;
+            right: 0;
+            width: 90%;
+            height: 10px;
+            background-color: rgba(221, 221, 221, 0.7);
+            /* Semi-transparent */
+            border-radius: 5px;
+            z-index: 2;
+            /* Ensure it's above the video */
+            cursor: pointer;
+        }
+
+        .seek-bar-progress {
+            height: 100%;
+            background-color: #007bff;
+            border-radius: 5px;
+            width: 0;
+        }
+
+        /* Red Dot for Ad Breaks */
+        .seek-bar-break-dot {
+            position: absolute;
+            top: 2.5px;
+            width: 5px;
+            height: 5px;
+            background-color: red;
+            border-radius: 50%;
+            z-index: 1;
+            transition: opacity 0.3s ease;
+        }
+
+        .seek-bar-break-dot.inactive {
+            opacity: 0;
+            /* Hide the dot when inactive */
+        }
+
+        .seek-bar-tooltip {
+            position: absolute;
+            top: -30px;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 5px;
+            border-radius: 5px;
+            font-size: 12px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>HLS Interstitial with TextTrack API</h1>
+    <div class="input-container">
+        <input type="text" id="url" name="url" placeholder="Enter HLS URL" />
+        <button onclick="start()">Play</button>
+    </div>
+    <div id="ad_progress">Ad 1 / 2 - 0:00 / 0:00</div>
+    <div class="video-container">
+        <video id="video" muted autoplay></video>
+        <video id="ad_video" muted autoplay></video>
+        <!-- Custom Seek Bar -->
+        <div class="seek-bar">
+            <div class="seek-bar-progress"></div>
+            <div class="seek-bar-tooltip"></div>
+        </div>
+    </div>
+
+    <script>
+        const adProgress = document.getElementById('ad_progress');
+        const video = document.getElementById('video');
+        const adVideo = document.getElementById('ad_video');
+        const seekBar = document.querySelector('.seek-bar');
+        const seekBarProgress = document.querySelector('.seek-bar-progress');
+        const seekBarTooltip = document.querySelector('.seek-bar-tooltip');
+        let adBreaks = []; // Store ad break timings and states
+        let mergedCues = {};
+
+
+        function start() {
+            adBreaks = []; // Store ad break timings and states
+            mergedCues = {};
+            adProgress.style.display = 'none';
+            adVideo.src = '';
+            adVideo.load();
+            video.src = '';
+            video.load();
+
+            const hlsUrl = document.getElementById('url').value;
+
+            video.src = hlsUrl;
+            video.play();
+
+            // Wait for the video's text tracks to load
+            video.addEventListener('loadedmetadata', () => {
+                // Check if text tracks are available
+                const textTracks = video.textTracks;
+                console.log('Text tracks:', textTracks.length);
+                textTracks.addEventListener('addtrack', ({ track }) => {
+                    if (track.kind === 'metadata') {
+                        console.log('metadata track ', track);
+                        track.mode = 'hidden'; // Set to hidden to avoid displaying cues
+                        track.addEventListener('cuechange', handleCueChange);
+                    }
+                });
+            });
+
+            // Handle clicks on the seek bar
+            seekBar.addEventListener('click', (event) => {
+                const rect = seekBar.getBoundingClientRect();
+                const clickPosition = (event.clientX - rect.left) / rect.width;
+                video.currentTime = clickPosition * video.duration;
+            });
+
+            // Show tooltip on seek bar hover
+            seekBar.addEventListener('mousemove', (event) => {
+                const rect = seekBar.getBoundingClientRect();
+                const hoverPosition = (event.clientX - rect.left) / rect.width;
+                const hoverTime = hoverPosition * video.duration;
+                seekBarTooltip.style.display = 'block';
+                seekBarTooltip.style.left = `${event.clientX - rect.left}px`;
+                seekBarTooltip.textContent = formatTime(hoverTime);
+            });
+
+            seekBar.addEventListener('mouseleave', () => {
+                seekBarTooltip.style.display = 'none';
+            });
+        }
+
+
+        // Handle cue changes
+        function handleCueChange(event) {
+            const activeCues = event.target.activeCues;
+            for (const cue of activeCues) {
+                if (cue.type === "com.apple.quicktime.HLS") {
+                    // Object to store merged cues
+                    const cueId = `${Math.round(cue.startTime)}-${Math.round(cue.endTime)}`; // Unique ID for each cue
+                    if (!mergedCues[cueId]) {
+                        // Initialize the merged cue object
+                        mergedCues[cueId] = {
+                            startTime: cue.startTime,
+                            endTime: cue.endTime,
+                            active: true,
+                            data: {},
+                        };
+                    }
+                    // Merge cue data
+                    if (cue.value && typeof cue.value === 'object') {
+                        for (const key in cue.value) {
+                            mergedCues[cueId].data[cue.value.key] = cue.value[key];
+                        }
+                    }
+
+                    // Check for interstitial start/end based on metadata
+                    if (mergedCues[cueId].data["X-CUE"]?.includes("ONCE") && mergedCues[cueId].active) {
+                        mergedCues[cueId].active = false;
+                        console.log('Interstitial started at:', mergedCues[cueId]);
+                        // Add custom logic for interstitial playback
+                        if (mergedCues[cueId].data["X-ASSET-LIST"]) {
+                            // Store ad break timings and state
+                            const breakMarker = addBreakMarker(cue.startTime);
+                            adBreaks.push({ start: cue.startTime, end: cue.endTime, marker: breakMarker, active: true });
+
+                            // Fetch and play the interstitial content
+                            playInterstitial(mergedCues[cueId], breakMarker);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add break marker to seek bar as a yellow dot
+        function addBreakMarker(startTime) {
+            const breakDot = document.createElement('div');
+            breakDot.className = 'seek-bar-break-dot';
+            breakDot.style.left = `${(startTime / video.duration) * 100}%`;
+            seekBar.appendChild(breakDot);
+            return breakDot;
+        }
+
+        // Function to play interstitial content
+        async function playInterstitial(cue, breakMarker) {
+            const assetListUrl = cue.data["X-ASSET-LIST"];
+            try {
+                // Fetch the asset list
+                const response = await fetch(assetListUrl);
+                const assetList = await response.json(); // Assuming the asset list is in JSON format
+                console.log(assetList);
+                if (!assetList || assetList.length === 0) {
+                    console.error('Interstitial URL not found in asset list');
+                }
+
+                console.log('ad break started');
+                for (let i = 0; i < assetList.ASSETS.length; i++) {
+                    // Extract the interstitial URL from the asset list
+                    const interstitialUrl = assetList.ASSETS[i].URI; // Replace with the actual key in your asset list
+                    console.log('Loading interstitial content:', interstitialUrl);
+                    video.pause(); // Pause the main content
+
+                    // Show the ad progress display
+                    adProgress.style.display = 'block';
+                    adProgress.textContent = `Ad ${i + 1}/${assetList.ASSETS.length} - 0:00 / ${formatTime(assetList.ASSETS[i].DURATION)}`;
+
+                    adVideo.style.display = 'block';
+                    adVideo.src = interstitialUrl;
+                    console.log('ad started');
+
+                    await playVideo(adVideo, i + 1, assetList.ASSETS.length); // Wait for the ad to finish playing
+                    console.log('ad ended');
+                    adVideo.style.display = 'none';
+                }
+
+                // Hide the ad progress display
+                adProgress.style.display = 'none';
+                breakMarker.classList.add('inactive'); // Hide the dot
+                console.log('ad break ended');
+
+                if (cue.data["X-RESUME-OFFSET"]) {
+                    video.currentTime = cue.data["X-RESUME-OFFSET"] || 0;
+                }
+
+                video.play(); // Resume the main content
+            } catch (error) {
+                console.error('Error loading interstitial content:', error);
+            }
+        }
+
+        // Helper function to play a video and wait for it to end
+        function playVideo(videoElement, currentAdIndex, totalAds) {
+            return new Promise((resolve) => {
+                videoElement.play();
+
+                // Update the progress display in real-time
+                videoElement.addEventListener('timeupdate', () => {
+                    const currentTime = Math.floor(videoElement.currentTime);
+                    const duration = Math.floor(videoElement.duration);
+                    adProgress.textContent = `Ad ${currentAdIndex}/${totalAds} - ${formatTime(currentTime)} / ${formatTime(duration)}`;
+                });
+
+                videoElement.addEventListener('ended', () => resolve(), { once: true });
+            });
+        }
+
+        // Helper function to format time (e.g., 65 -> 1:05)
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${minutes}:${secs.toString().padStart(2, '0')}`;
+        }
+    </script>
+</body>
+
+</html>
