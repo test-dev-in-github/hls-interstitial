@@ -189,6 +189,9 @@
                 });
             });
 
+            // Update seek bar progress as the video plays
+            video.addEventListener('timeupdate', updateSeekBar);
+
             // Handle clicks on the seek bar
             seekBar.addEventListener('click', (event) => {
                 const rect = seekBar.getBoundingClientRect();
@@ -260,6 +263,12 @@
             return breakDot;
         }
 
+        // Update seek bar progress
+        function updateSeekBar() {
+            const progress = (video.currentTime / video.duration) * 100;
+            seekBarProgress.style.width = `${progress}%`;
+        }
+
         // Function to play interstitial content
         async function playInterstitial(cue, breakMarker) {
             const assetListUrl = cue.data["X-ASSET-LIST"];
@@ -268,16 +277,13 @@
                 // Fetch the asset list
                 const response = await fetch(assetListUrl);
                 const assetList = await response.json(); // Assuming the asset list is in JSON format
-                console.log(assetList);
                 if (!assetList || assetList.length === 0) {
                     console.error('Interstitial URL not found in asset list');
                 }
 
                 console.log('ad break started', cue);
                 for (let i = 0; i < assetList.ASSETS.length; i++) {
-                    // Extract the interstitial URL from the asset list
-                    const interstitialUrl = assetList.ASSETS[i].URI; // Replace with the actual key in your asset list
-                    console.log('Loading interstitial content:', interstitialUrl);
+                    const interstitialUrl = assetList.ASSETS[i].URI;
                     video.pause(); // Pause the main content
 
                     // Show the ad progress display
@@ -286,7 +292,7 @@
 
                     adVideo.style.display = 'block';
                     adVideo.src = interstitialUrl;
-                    console.log('ad started');
+                    console.log('ad started', interstitialUrl);
 
                     await playVideo(adVideo, i + 1, assetList.ASSETS.length); // Wait for the ad to finish playing
                     console.log('ad ended');
