@@ -181,10 +181,8 @@
             video.addEventListener('loadedmetadata', () => {
                 // Check if text tracks are available
                 const textTracks = video.textTracks;
-                console.log('Text tracks:', textTracks.length);
                 textTracks.addEventListener('addtrack', ({ track }) => {
                     if (track.kind === 'metadata') {
-                        console.log('metadata track ', track);
                         track.mode = 'hidden'; // Set to hidden to avoid displaying cues
                         track.addEventListener('cuechange', handleCueChange);
                     }
@@ -239,8 +237,6 @@
 
                     // Check for interstitial start/end based on metadata
                     if (mergedCues[cueId].data["X-CUE"]?.includes("ONCE") && mergedCues[cueId].active) {
-                        mergedCues[cueId].active = false;
-                        console.log('Interstitial started at:', mergedCues[cueId]);
                         // Add custom logic for interstitial playback
                         if (mergedCues[cueId].data["X-ASSET-LIST"]) {
                             // Store ad break timings and state
@@ -267,6 +263,7 @@
         // Function to play interstitial content
         async function playInterstitial(cue, breakMarker) {
             const assetListUrl = cue.data["X-ASSET-LIST"];
+            cue.active = false;
             try {
                 // Fetch the asset list
                 const response = await fetch(assetListUrl);
@@ -276,7 +273,7 @@
                     console.error('Interstitial URL not found in asset list');
                 }
 
-                console.log('ad break started');
+                console.log('ad break started', cue);
                 for (let i = 0; i < assetList.ASSETS.length; i++) {
                     // Extract the interstitial URL from the asset list
                     const interstitialUrl = assetList.ASSETS[i].URI; // Replace with the actual key in your asset list
