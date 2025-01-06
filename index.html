@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.0-beta.2"></script>
     <title>HLS Interstitial with TextTrack API</title>
     <style>
         body {
@@ -159,9 +160,10 @@
         const seekBar = document.querySelector('.seek-bar');
         const seekBarProgress = document.querySelector('.seek-bar-progress');
         const seekBarTooltip = document.querySelector('.seek-bar-tooltip');
+        let hls = null;
         let adBreaks = []; // Store ad break timings and states
         let mergedCues = {};
-
+        let currentAd = null;
 
         function start() {
             adBreaks = []; // Store ad break timings and states
@@ -174,20 +176,56 @@
 
             const hlsUrl = document.getElementById('url').value;
 
-            video.src = hlsUrl;
-            video.play();
+            if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = hlsUrl;
+                video.play();
 
-            // Wait for the video's text tracks to load
-            video.addEventListener('loadedmetadata', () => {
-                // Check if text tracks are available
-                const textTracks = video.textTracks;
-                textTracks.addEventListener('addtrack', ({ track }) => {
-                    if (track.kind === 'metadata') {
-                        track.mode = 'hidden'; // Set to hidden to avoid displaying cues
-                        track.addEventListener('cuechange', handleCueChange);
+                // Wait for the video's text tracks to load
+                video.addEventListener('loadedmetadata', () => {
+                    // Check if text tracks are available
+                    const textTracks = video.textTracks;
+                    textTracks.addEventListener('addtrack', ({ track }) => {
+                        if (track.kind === 'metadata') {
+                            track.mode = 'hidden'; // Set to hidden to avoid displaying cues
+                            track.addEventListener('cuechange', handleCueChange);
+                        }
+                    });
+                });
+            } else if (Hls.isSupported()) {
+                hls = new Hls();
+                hls.loadSource(hlsUrl);
+                hls.attachMedia(video);
+
+                hls.on(Hls.Events.INTERSTITIALS_UPDATED, (_, {events}) => {
+                    adBreaks = events.map((event) => ({ start: event.startTime, end: event.endTime, marker: addBreakMarker(event.startTime), active: true }));
+                });
+                hls.on(Hls.Events.INTERSTITIAL_STARTED, (_, event) => {
+                    console.log('ad break started', event);
+                });
+                hls.on(Hls.Events.INTERSTITIAL_ENDED, (_, event) => {
+                    console.log('ad break ended', event);
+                });
+                hls.on(Hls.Events.INTERSTITIAL_ASSET_STARTED, (_, event) => {
+                    currentAd = event;
+                    console.log('ad started', event);
+                });
+                hls.on(Hls.Events.INTERSTITIAL_ASSET_ENDED, (_, event) => {
+                    currentAd = null;
+                    console.log('ad ended', event);
+                });
+                video.addEventListener('timeupdate', () => {
+                    if (currentAd) {
+                        adProgress.style.display = 'block';
+                        const currentTime = Math.floor(video.currentTime);
+                        const duration = Math.floor(currentAd.asset.duration);
+                        adProgress.textContent = `Ad ${currentAd.assetListIndex + 1}/${currentAd.event.assetList.length} - ${formatTime(currentTime)} / ${formatTime(duration)}`;
+                    } else {
+                        adProgress.style.display = 'none';
                     }
                 });
-            });
+            } else {
+                return;
+            }
 
             // Update seek bar progress as the video plays
             video.addEventListener('timeupdate', updateSeekBar);
@@ -213,7 +251,6 @@
                 seekBarTooltip.style.display = 'none';
             });
         }
-
 
         // Handle cue changes
         function handleCueChange(event) {
