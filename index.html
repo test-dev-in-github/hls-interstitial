@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1.6.0-beta.2"></script>
-    <title>HLS Interstitial with TextTrack API</title>
+    <title>HLS Interstitials</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -137,7 +137,7 @@
 </head>
 
 <body>
-    <h1 id="title">HLS Interstitial</h1>
+    <h1 id="title">HLS Interstitials</h1>
     <div class="input-container">
         <input type="text" id="url" name="url" placeholder="Enter HLS URL" />
         <button onclick="start()">Play</button>
@@ -180,7 +180,7 @@
             const hlsUrl = document.getElementById('url').value;
 
             if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                title.textContent =  'HLS Interstitial with Native TextTrack API';
+                title.textContent =  'HLS Interstitials with Native TextTrack API';
 
                 video.src = hlsUrl;
                 video.play();
@@ -197,7 +197,7 @@
                     });
                 });
             } else if (Hls.isSupported()) {
-                title.textContent =  'HLS Interstitial with hls.js 1.6.0-beta';
+                title.textContent =  'HLS Interstitials with hls.js 1.6.0-beta';
 
                 hls = new Hls();
                 hls.loadSource(hlsUrl);
