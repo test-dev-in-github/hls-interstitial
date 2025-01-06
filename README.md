@@ -1,1 +1,1 @@
-# safari-hls-interstitial
+# hls-interstitial
